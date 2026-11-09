@@ -1,0 +1,27 @@
+# 데이터: 분할 CSV만 저장소에 포함
+data/*
+!data/splits/
+
+# 이미지·압축 파일 (블로그용 그림은 assets/에 두고 포함)
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.zip
+!assets/**
+
+# 모델 가중치·체크포인트
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+checkpoints/
+
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
