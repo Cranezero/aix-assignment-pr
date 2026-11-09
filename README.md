@@ -7,37 +7,68 @@
 | 이학영 | 경영학부 | cranezero1103@gmail.com |
 | 장윤도 | 화학과 | zhangrt2024@yeah.net |
 | 류현성 | 전자공학부 | ksi7080z@naver.com |
-| 이름4 | 학과 | email@hanyang.ac.kr |
+| 정재호 | 컴퓨터소프트웨어학부 | jaeho041005@outlook.com |
 
-**Video**: [YouTube 링크](https://www.youtube.com/) <!-- 최종 제출 시 실제 링크로 교체 -->
+**Video**: (작성중)
 
-**Table of Contents**
-[I. Proposal](#i-proposal) · [II. Datasets](#ii-datasets) · [III. Methodology](#iii-methodology) · [IV. Evaluation & Analysis](#iv-evaluation--analysis) · [V. Related Work](#v-related-work) · [VI. Conclusion](#vi-conclusion)
+## Table of Contents
 
----
+- [I. Proposal](#i-proposal)
+  - [Motivation](#motivation)
+  - [Goal](#goal)
+  - [Dataset](#dataset)
+  - [Approach](#approach)
+- [II. Datasets](#ii-datasets)
+  - [Source](#source)
+  - [Country Selection](#country-selection)
+  - [Split & Preprocessing](#split--preprocessing)
+  - [Exploration](#exploration)
+- [III. Methodology](#iii-methodology)
+  - [Why CLIP](#why-clip)
+  - [Common Setup](#common-setup)
+  - [Method 1: Zero-shot Classification](#method-1-zero-shot-classification)
+  - [Method 2: Linear Probe](#method-2-linear-probe)
+  - [Method 3: Partial Fine-tuning](#method-3-partial-fine-tuning)
+- [IV. Evaluation & Analysis](#iv-evaluation--analysis)
+  - [Overall Comparison](#overall-comparison)
+  - [Prompt Comparison](#prompt-comparison)
+  - [Learning Curve](#learning-curve)
+  - [Confusion Matrix](#confusion-matrix)
+  - [Case Study](#case-study)
+- [V. Related Work](#v-related-work)
+- [VI. Conclusion](#vi-conclusion)
+  - [Discussion](#discussion)
+  - [Limitations](#limitations)
+  - [Contributions](#contributions)
+- [Appendix: Reproduction](#appendix-reproduction)
 
 ## I. Proposal
 
 ### Motivation
-GeoGuessr에서 사람은 표지판 문자, 차선, 식생 등의 단서로 사진이 촬영된 국가를 추론한다. 본 프로젝트는 이미지–텍스트 쌍으로 사전학습된 CLIP이 같은 과제를 어느 수준까지 수행하는지 검증한다.
+GeoGuessr 플레이어는 표지판 문자, 통행 방향, 전신주, 식생 같은 단서로 거리 사진의 국가를 맞힌다. CLIP은 이미지-텍스트 쌍 약 4억 개로 사전학습되었고, 사진 설명에는 지명이 자주 등장한다. 따라서 CLIP이 국가별 시각적 특징을 이미 학습했을 수 있다.
+
+본 프로젝트는 CLIP이 거리 사진의 국가를 얼마나 맞히는지, 그리고 선형 프로브와 부분 파인튜닝으로 학습 범위를 넓히면 성능이 어떻게 달라지는지 탐구한다.
 
 ### Goal
-1. 학습 없는 제로샷 분류의 성능을 측정한다.
-2. 모델에 대한 개입 깊이(분류기만 학습 → 인코더 일부 학습)에 따른 성능 변화를 비교한다.
-3. 국가 간 혼동 양상과 그 원인을 분석한다.
+1. **제로샷**: 학습 없이 국가를 얼마나 맞히는지, 프롬프트 표현에 따라 결과가 달라지는지 측정한다.
+2. **선형 프로브와 부분 파인튜닝**: 분류기만 학습할 때와 인코더 마지막 블록까지 학습할 때 성능이 제로샷 대비 얼마나 변하는지 비교한다.
+3. **혼동 분석**: 어떤 국가끼리 혼동하는지, 학습 후 혼동이 줄어드는지 분석한다.
 
 ### Dataset
-[OSV-5M](https://huggingface.co/datasets/osv5m/osv5m)의 거리 사진 중 15~20개국을 선정하여 국가당 500~1,000장을 사용한다. 테스트 세트는 공식 test split에서 추출한다.
+[OSV-5M](https://huggingface.co/datasets/osv5m/osv5m)에서 15~20개국, 국가당 500~1,000장을 사용한다. 한국-일본, 스페인-포르투갈처럼 비슷한 국가 쌍을 포함한다. 테스트 세트는 공식 test split에서 추출한다.
 
 ### Approach
+세 방법 모두 같은 사전학습 CLIP(ViT-B/32)에서 시작하고, 학습 범위만 다르다.
 
-| 단계 | 방법 | 학습 대상 |
-| --- | --- | --- |
-| 1 | 제로샷 분류 | 없음 |
-| 2 | 선형 프로브 | 분류기 |
-| 3 | 부분 파인튜닝 | 인코더 마지막 블록 + 분류층 |
+| 단계 | 방법 | 학습 대상 | 방식 |
+| --- | --- | --- | --- |
+| 1 | 제로샷 분류 | 없음 | 사진과 "a street photo taken in {국가}" 문장의 유사도로 분류 |
+| 2 | 선형 프로브 | 분류기 | 고정된 이미지 임베딩으로 로지스틱 회귀 학습 |
+| 3 | 부분 파인튜닝 | 인코더 마지막 블록 + 분류층 | 인코더 일부를 우리 데이터로 학습 |
 
----
+- 모든 방법을 같은 테스트 세트로 평가한다.
+- 부분 파인튜닝의 분류층은 제로샷의 국가별 문장 임베딩으로 초기화한다. 제로샷과 같은 지점에서 학습을 시작하므로 성능 차이가 곧 학습 효과다.
+- 지표는 Top-1, Top-5, macro 정확도, 혼동행렬이다.
 
 ## II. Datasets
 
@@ -45,71 +76,49 @@ GeoGuessr에서 사람은 표지판 문자, 차선, 식생 등의 단서로 사�
 [OSV-5M](https://huggingface.co/datasets/osv5m/osv5m): 전 세계 거리 사진 약 510만 장, 225개 국가·지역, 사진별 국가·위경도 라벨 (CC-BY-SA-4.0).
 
 ### Country Selection
-<!-- 메타데이터 국가별 장수 집계 결과와 선정 기준, 최종 국가 목록 -->
-
-| 국가 | 코드 | Train | Val | Test |
-| --- | --- | --- | --- | --- |
-| — | — | — | — | — |
+(작성중)
 
 ### Split & Preprocessing
-<!-- 공식 test split 사용 근거(누수 방지), train:val = 85:15, 224×224 리사이즈, 국가당 장수 균등화 -->
+(작성중)
 
 ### Exploration
-<!-- 국가별 예시 그리드, 사람이 쓰는 단서(문자·통행 방향·식생) 정리 -->
-
-![국가별 예시 이미지](assets/eda_grid.png)
-
----
+(작성중)
 
 ## III. Methodology
 
 ### Why CLIP
-<!-- 이미지·문장의 공동 임베딩 공간, 제로샷 분류 원리, 수작업 특징 없음 -->
+(작성중)
 
 ### Common Setup
 - 모델: `openai/clip-vit-base-patch32`
 - 라이브러리: Hugging Face transformers, PyTorch, scikit-learn
 - 환경: Google Colab (GPU), seed 고정
 
-### Method 1 — Zero-shot Classification
-<!-- 프롬프트 생성 → 전처리 → 유사도 → Top-1/Top-5 예측. 핵심 코드 일부 -->
+### Method 1: Zero-shot Classification
+(작성중)
 
-### Method 2 — Linear Probe
-<!-- 고정 인코더 임베딩 추출 → 로지스틱 회귀, 검증 세트로 정규화 강도 선택 -->
+### Method 2: Linear Probe
+(작성중)
 
-### Method 3 — Partial Fine-tuning
-<!-- 마지막 블록 + 분류층 학습, 분류층을 문장 임베딩으로 초기화, 하이퍼파라미터, 증강(좌우 반전 제외 이유) -->
-
----
+### Method 3: Partial Fine-tuning
+(작성중)
 
 ## IV. Evaluation & Analysis
 
 ### Overall Comparison
+(작성중)
 
-| 방법 | Top-1 | Top-5 | Macro Acc. | 학습 시간 |
-| --- | --- | --- | --- | --- |
-| 제로샷 | — | — | — | — |
-| 선형 프로브 | — | — | — | — |
-| 부분 파인튜닝 | — | — | — | — |
+### Prompt Comparison
+(작성중)
 
-### Prompt Comparison (Method 1)
-
-| 프롬프트 | Top-1 |
-| --- | --- |
-| `Korea` | — |
-| `a photo of Korea` | — |
-| `a street photo taken in Korea` | — |
-
-### Learning Curve (Method 3)
-![학습 곡선](assets/learning_curve.png)
+### Learning Curve
+(작성중)
 
 ### Confusion Matrix
-![혼동행렬: 제로샷 vs 파인튜닝](assets/confusion_matrix.png)
+(작성중)
 
 ### Case Study
-<!-- 제로샷 오답·파인튜닝 정답 사례, 전 방법 오답 사례와 해석 -->
-
----
+(작성중)
 
 ## V. Related Work
 
@@ -118,20 +127,16 @@ GeoGuessr에서 사람은 표지판 문자, 차선, 식생 등의 단서로 사�
 - [OSV-5M Dataset](https://huggingface.co/datasets/osv5m/osv5m)
 - [Hugging Face CLIP Documentation](https://huggingface.co/docs/transformers/model_doc/clip)
 
----
-
 ## VI. Conclusion
 
 ### Discussion
-<!-- 학습 없이 도달한 성능, 개입 깊이에 따라 개선된 점과 개선되지 않은 점 -->
+(작성중)
 
 ### Limitations
-<!-- 일부 국가·거리 사진 한정, 소규모 데이터의 과적합 가능성, CLIP 사전학습 데이터와의 중복 가능성 -->
+(작성중)
 
 ### Contributions
-<!-- 팀원별 역할 (과제 Task 5) -->
-
----
+(작성중)
 
 ## Appendix: Reproduction
 
@@ -140,7 +145,7 @@ GeoGuessr에서 사람은 표지판 문자, 차선, 식생 등의 단서로 사�
 ```
 notebooks/      실험 노트북 (아래 순서대로 실행)
 src/            노트북 공통 모듈 (데이터 로드, CLIP 유틸, 평가 지표)
-data/splits/    train/val/test 분할 CSV (이미지 ID–국가)
+data/splits/    train/val/test 분할 CSV (이미지 ID, 국가)
 results/        방법별 예측·지표
 assets/         블로그 게시용 그림
 requirements.txt
@@ -148,9 +153,9 @@ requirements.txt
 
 ### Setup (Google Colab)
 
+저장소 clone: (작성중)
+
 ```bash
-git clone https://github.com/<user>/<repo>.git  # 공개 저장소 주소로 교체
-cd <repo>
 pip install -r requirements.txt
 ```
 
