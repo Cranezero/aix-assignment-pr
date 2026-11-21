@@ -1,0 +1,4 @@
+template,example,top1,top5,macro
+{country},South Korea,0.4445,0.83475,0.44449999999999995
+a photo of {country},a photo of South Korea,0.48125,0.87875,0.48125
+a street photo taken in {country},a street photo taken in South Korea,0.41925,0.84175,0.41925
